@@ -1,0 +1,172 @@
+1.建库 
+	CREATE DATABASE IF NOT EXISTS gloryroad DEFAULT CHARSET utf8 COLLATE utf8_general_ci;
+	注： COLLATE utf8_general_ci 为字符校验规则，为不区分大小写插入数据
+
+2.建表 
+	表studentinfo：
+	create table studentInfo( 
+		ID int not null auto_increment comment "不为空的自增长的主键ID", 
+		student_id varchar(20) not null, 
+		name varchar(30) not null, 
+		sex char(4), 
+		tel varchar(13) unique not null, 
+		AdmissionDate datetime default '0000:00:00 00:00:00', 
+		status tinyint(2) default 0,
+		primary key (ID), 
+		unique student_id(student_id) 
+	)engine=innodb character set utf8 comment "学生信息表";
+	
+表grade：
+	create table grade(
+		ID int auto_increment not null,
+		stuID varchar(20),
+		course varchar(20) not null,
+		score tinyint(4) default 0,
+		primary key (ID),
+		key idx_stuid(stuID),
+		CONSTRAINT FK_ID FOREIGN KEY(stuID) REFERENCES studentInfo(student_id)
+	)engine=innodb character set utf8 comment "学生成绩表";
+	
+	
+3.向数据库插入数据
+#encoding=utf-8
+import MySQLdb
+import random
+def insertData():
+	conn = MySQLdb.connect(
+	host = "218.60.94.15",
+	port = 45281,
+	user = "root",
+	passwd = "gloryroad2016!!",
+	db = "gloryroad",
+	charset = "utf8")
+	cur = conn.cursor()
+	conn.select_db('gloryroad')
+	courseList = ['python', 'java', 'mysql', 'linux', '接口测试', '性能测试', '自动化测试','数据结构与算法']
+	for i in xrange(1, 101):
+		student_id = '201603' + '0' * (3 - len(str(i))) + str(i)
+		name = random.choice(['Lucy','Tom','Lily','Amy','Dave','Aaron','Baron']) + str(i)
+		tel = '1' + str(random.choice([3, 5, 7, 8])) + str(random.random())[2:11]
+		sex = random.choice(['女', '男'])
+		stuinfo_sql = "insert into studentInfo(student_id, name, sex, tel, AdmissionDate) \
+		values('%s', '%s', '%s', '%s', date_sub(now(),interval %s day))" \
+		%(student_id, name, sex, tel, random.randint(90, 120))
+		cur.execute(stuinfo_sql)
+		conn.commit()
+		for j in courseList:
+			grade_sql = "insert into grade(stuID,course,score) values('%s','%s',%s)" %(student_id,j,random.randint(80, 100))
+			cur.execute(grade_sql)
+	conn.commit()
+	cur.close()
+	conn.commit()
+	conn.close()
+insertData()
+print u"数据插入结束！"
+
+
+4.sql语句实战
+查看数据库中存在的库
+	show databases;
+
+选择库
+	use gloryroad;
+
+查看某个库里存在的表
+	show tables;
+
+
+模糊查询 
+	select * from studentinfo where name like '%ar%';
+	
+多条件查询 
+	select name from studentinfo where AdmissionDate='2016-05-21 11:38:17' or tel='15086597430';
+	
+取grade表中分数大于99的前10条数据 
+	select * from grade where score>99 limit 10;
+	
+取grade表中分数大于99中跳过10条数据取5条数据 
+	select * from grade where score>99 limit 10,5;
+	
+根据课程分组 
+	select course,count(*) from grade group by course; 
+	select stuID,count(*) from grade group by stuID having stuID=201603100; 
+	select stuID,score from grade group by stuID having score=99; 
+	select stuID,count(score) count_tmp from grade where score>=90 group by stuID having count_tmp>=1;
+	
+二次筛选 
+	select * from grade where course='python' and score>=95;
+	
+升序排序 
+	select * from grade where course='mysql' order by score desc limit 10;
+	
+降序排序
+	select * from grade where course='java' order by score asc limit 10;
+	
+查询入学时间不在'2016-05-03 11:38:17'和'2016-05-29 11:38:18'之间的学生
+	select * from studentinfo where AdmissionDate not in (select AdmissionDate from studentinfo where AdmissionDate>'2016-05-03 11:38:17' and AdmissionDate<'2016-05-29 11:38:18');
+
+内连接 
+	select * from studentInfo as s inner join grade as g on s.student_id=g.stuid limit 2; 
+	select g.stuID, s.name, g.course,g.score from studentinfo as s inner join grade as g on s.student_id=g.stuid limit 10;	
+
+右连接 
+	select * from grade as g right join studentinfo as s on s.student_id=g.stuid limit 10; select s.ID,g.ID,g.stuID, s.name, g.course,g.score from studentinfo as s right join grade as g on s.student_id=g.stuid limit 790,10;
+
+根据学生分组，并求每个学生的总分 
+	select stuID,sum(score) from grade group by stuID limit 10;
+
+以学生分组，并求每个学生的总分数，再此结果上再筛选总分大于等于700的，并降序排序，最后取前10名 
+	select stuID,sum(score) as sum from grade group by stuID having sum>=700 order by sum desc limit 10;
+	
+上句基础上再结合表连接 
+	select g.stuID, s.name, sum(score) as sum from studentinfo as s inner join grade as g on s.student_id=g.stuID group by stuID having sum>=700 order by sum desc limit 10;
+	
+全班每门课平均成绩 
+	select course,avg(score) from grade group by course;
+	
+更新
+	updata grade set score=100 where stuID="201603001";
+
+
+5.使用存储过程造数据
+	delimiter //
+	create procedure createDatas()
+	begin
+		set @i = 100;
+		set @n = 200;
+		while @i <= @n do
+			set @student_id = concat("201702", @i);
+			set @name = concat('wubaiwan', @i);
+			set @sex = "男";
+			set @tel = concat("18", right(rand(),9));
+			set @AdmissionDate = date_sub(now(), interval floor(rand()*50) day);
+			insert into studentInfo(student_id, name, sex, tel, AdmissionDate) values(@student_id, @name, @sex, @tel, @AdmissionDate);
+			
+			set @course_one = "python";
+			set @course_two = "java";
+			set @score = floor(70 + rand()*30);
+			insert into grade(stuID, course, score) values(@student_id, @course_one, @score);
+			insert into grade(stuID, course, score) values(@student_id, @course_two, @score);
+			set @i = @i + 1;
+		end while;
+	end //
+	delimiter ;	
+
+删除存储过程
+	drop procedure createDatas;
+	
+清空表
+	truncate table studentInfo;
+	truncate table grade;
+
+删除表
+	drop table grade;
+	drop table studentInfo;
+
+删除数据
+	delete from grade where stuID="201702100";
+
+
+
+
+
